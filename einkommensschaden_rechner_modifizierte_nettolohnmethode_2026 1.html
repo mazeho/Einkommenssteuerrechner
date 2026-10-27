@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Einkommensschaden-Rechner – Modifizierte Nettolohnmethode (2026)</title>
+  <style>
+    :root { --gap: 14px; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; margin: 0; background: #0b1020; color: #e8ecf1; }
+    header { padding: 24px 20px; background: linear-gradient(135deg,#121a39,#0b1020 60%); border-bottom: 1px solid #2a335a; position: sticky; top:0; z-index:10; }
+    header h1 { margin: 0; font-size: clamp(18px,3.5vw,26px); font-weight: 700; letter-spacing: .2px; }
+    header p { margin: 6px 0 0; color: #9fb2ce; font-size: 13px; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--gap); }
+    .card { background: #0f1630; border: 1px solid #2a335a; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.25); overflow: hidden; }
+    .card h2 { margin: 0; padding: 14px 16px; font-size: 16px; background: #0b1332; border-bottom: 1px solid #283156; color: #a3b8dc; text-transform: uppercase; letter-spacing: .6px; }
+    .card .content { padding: 16px; }
+    .row { display: grid; grid-template-columns: 1fr 220px; gap: 10px; align-items: center; margin-bottom: 10px; }
+    label { font-size: 13px; color: #c9d7ee; }
+    input, select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #2a335a; background: #0b1332; color: #e8ecf1; font-size: 14px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; align-items: center; }
+    button { padding: 10px 14px; border-radius: 12px; border: 1px solid #304074; background: #1a2b68; color: #e8ecf1; cursor: pointer; font-weight: 600; }
+    button:hover { background: #203376; }
+    .result { font-variant-numeric: tabular-nums; border-top: 1px dashed #2a335a; margin-top: 14px; padding-top: 14px; }
+    .result h3 { margin: 0 0 10px; font-size: 15px; color: #a3b8dc; }
+    .result .line { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; border-bottom: 1px dotted #263058; }
+    .result .line:last-child { border-bottom: none; }
+    .small { font-size: 12px; color: #8ea6cf; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #32406f; background:#121b3e; color:#b0c6f1; font-size:11px; }
+    .print-only { display: none; }
+    .screen-only { display: block; }
+    .subtle-box { border:1px solid #2a335a; border-radius:12px; padding:12px; background:#0b1332; }
+    .calc-steps { margin-top: 10px; }
+    .calc-steps div { padding: 4px 0; color:#bcd; }
+    .ok { color: #86efac; }
+    .fail { color: #fca5a5; }
+    @media print {
+      body { background:#fff; color:#111; }
+      header { position: static; background:#fff; color:#111; border-bottom: 1px solid #ccc; }
+      header p, .small, .hint { color:#444 !important; }
+      .container { max-width: none; padding: 0; }
+      .grid { display:block; }
+      .card { box-shadow:none; border:1px solid #bbb; background:#fff; color:#111; margin-bottom: 12px; break-inside: avoid; }
+      .card h2 { background:#f3f3f3; color:#111; border-bottom:1px solid #ccc; }
+      input, select, button { border:1px solid #bbb; background:#fff; color:#111; }
+      .result .line { border-bottom:1px dotted #bbb; }
+      .screen-only { display:none !important; }
+      .print-only { display:block !important; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Einkommensschaden-Rechner – Mod. Nettolohnmethode (VZ 2026)</h1>
+    <p>Tarif §32a EStG 2026, §34 (Fünftel), Soli-Freigrenze & Gleitzone, KiSt. <span class="badge">Beta</span></p>
+  </header>
+
+  <div class="container">
+    <div class="card screen-only" style="margin-bottom: 14px;">
+      <h2>Ausgabe</h2>
+      <div class="content">
+        <div class="actions">
+          <button id="printBtn">PDF-/Druckansicht öffnen</button>
+        </div>
+        <p class="small">Öffnet die Druckansicht. Der Ausdruck enthält auch den Berechnungsweg der aktuell berechneten Ergebnisse.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Allgemeine Einstellungen</h2>
+        <div class="content">
+          <div class="row">
+            <label for="filing">Veranlagungsart</label>
+            <select id="filing">
+              <option value="single">Grundtabelle (ledig)</option>
+              <option value="splitting">Splittingtabelle (verheiratet)</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="kist">Kirchensteuer</label>
+            <select id="kist">
+              <option value="0">keine</option>
+              <option value="0.08">8 % (BY, BW)</option>
+              <option value="0.09">9 % (übrige Länder)</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="soli">Solidaritätszuschlag</label>
+            <select id="soli">
+              <option value="auto">Automatisch (Freigrenzen & Gleitzone 2026)</option>
+              <option value="on">immer berechnen</option>
+              <option value="off">nicht berechnen</option>
+            </select>
+          </div>
+          <p class="small">Tarif 2026 gem. §32a; Soli inkl. Freigrenze (20.350/40.700) &amp; Milderungszone.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Basis‑Einkommen (zvE) 2026</h2>
+        <div class="content">
+          <div class="row">
+            <label for="zve1">Regelm. Einkommen (zvE) Person A</label>
+            <input id="zve1" type="number" inputmode="decimal" value="65000" />
+          </div>
+          <div class="row" id="zve2row" style="display:none;">
+            <label for="zve2">Regelm. Einkommen (zvE) Person B</label>
+            <input id="zve2" type="number" inputmode="decimal" value="12000" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Sozialleistungen (Renten) – Brutto → Netto</h2>
+        <div class="content">
+          <div class="row">
+            <label for="renteBrutto">Jährliche Brutto‑Rente</label>
+            <input id="renteBrutto" type="number" inputmode="decimal" value="0" />
+          </div>
+          <div class="row">
+            <label for="renteBeginn">Jahr des Rentenbeginns</label>
+            <select id="renteBeginn"></select>
+          </div>
+          <div class="row">
+            <label for="renteErstjahr">Jahresbrutto im Gewährungsjahr (optional)</label>
+            <input id="renteErstjahr" type="number" inputmode="decimal" placeholder="falls bekannt" />
+          </div>
+          <p class="small">Freibetrag (Euro) = Erstjahres‑Brutto × nicht steuerpfl. Anteil; wird lebenslang festgeschrieben.</p>
+          <div class="actions">
+            <button id="calcRente">Netto‑Rente berechnen</button>
+          </div>
+          <div class="result" id="outRente" hidden></div>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1;">
+        <h2>Modifizierte Nettolohnmethode</h2>
+        <div class="content">
+          <div class="row">
+            <label for="netto">Fiktives Nettogehalt (jährlich)</label>
+            <input id="netto" type="number" inputmode="decimal" value="0" />
+          </div>
+          <div class="row">
+            <label for="nettorente">Netto‑Sozialrenten (jährlich)</label>
+            <input id="nettorente" type="number" inputmode="decimal" value="0" />
+          </div>
+          <div class="row">
+            <label for="txShare">Steuerpflichtanteil der Sozialrenten (%)</label>
+            <input id="txShare" type="number" inputmode="decimal" value="100" />
+          </div>
+          <div class="actions">
+            <button id="calcNet">Nettolohnmethode berechnen</button>
+          </div>
+          <div class="result" id="outNet" hidden></div>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1;">
+        <h2>Außerordentliche Einkünfte (§34 EStG) – Netto → Brutto</h2>
+        <div class="content">
+          <div class="row">
+            <label for="extra">Außerordentliche Einkünfte (Netto, z. B. Abfindung)</label>
+            <input id="extra" type="number" inputmode="decimal" value="30000" />
+          </div>
+          <div class="actions">
+            <button id="calc34">§34 berechnen</button>
+          </div>
+          <div class="result" id="out34" hidden></div>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1;">
+        <h2>Selbsttest</h2>
+        <div class="content">
+          <div class="actions"><button id="runTests">Tests ausführen</button></div>
+          <div class="result" id="testOutput" hidden></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const clamp0 = (n) => Math.max(0, +n || 0);
+  const eur = (n) => (n).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+
+  function est2026_single(x){
+    x = +x || 0;
+    let E = 0;
+    if (x <= 12348) E = 0;
+    else if (x <= 17799) {
+      const y = (x - 12348) / 10000;
+      E = (914.51 * y + 1400) * y;
+    } else if (x <= 69878) {
+      const z = (x - 17799) / 10000;
+      E = (173.10 * z + 2397) * z + 1034.87;
+    } else if (x <= 277825) {
+      E = 0.42 * x - 11135.63;
+    } else {
+      E = 0.45 * x - 19470.38;
+    }
+    return Math.floor(E);
+  }
+
+  function est2026(x, filing){
+    if (filing === 'splitting') return 2 * est2026_single(x / 2);
+    return est2026_single(x);
+  }
+
+  function soliFromEst(est, filing, mode='auto'){
+    if (mode === 'off') return 0;
+    const base = Math.max(0, est);
+    if (mode === 'on') return Math.floor(base * 0.055);
+    const free = filing === 'splitting' ? 40700 : 20350;
+    if (base <= free) return 0;
+    const gleit = 0.119 * (base - free);
+    return Math.floor(Math.min(base * 0.055, gleit));
+  }
+
+  function kistFromEst(est, rate){
+    return Math.floor(Math.max(0, est) * rate);
+  }
+
+  function wrapLevies(est, filing, kistRate, soliMode){
+    const kist = kistFromEst(est, kistRate);
+    const soli = soliFromEst(est, filing, soliMode);
+    return { est: Math.floor(est), kist: Math.floor(kist), soli: Math.floor(soli), total: Math.floor(est + kist + soli) };
+  }
+
+  function fifthRuleTax(zveBase, extra, filing){
+    const estBase = est2026(zveBase, filing);
+    const estWithFifth = est2026(zveBase + extra / 5, filing);
+    return 5 * Math.max(0, estWithFifth - estBase);
+  }
+
+  function noFifthTax(zveBase, extra, filing){
+    const estBase = est2026(zveBase, filing);
+    const estWith = est2026(zveBase + extra, filing);
+    return Math.max(0, estWith - estBase);
+  }
+
+  function leviesOnExtra34(zveBase, extra, filing, kistRate, soliMode, useFifth){
+    const estBase = est2026(zveBase, filing);
+    const estExtra = useFifth ? fifthRuleTax(zveBase, extra, filing) : noFifthTax(zveBase, extra, filing);
+    const estTotal = estBase + estExtra;
+    const soliDelta = soliFromEst(estTotal, filing, soliMode) - soliFromEst(estBase, filing, soliMode);
+    const kistDelta = kistFromEst(estExtra, kistRate);
+    const total = Math.floor(estExtra + kistDelta + Math.max(0, Math.floor(soliDelta)));
+    return { est: Math.floor(estExtra), kist: Math.floor(kistDelta), soli: Math.floor(Math.max(0, soliDelta)), total };
+  }
+
+  function leviesDeltaFromExtra(zveBase, extraTaxable, filing, kistRate, soliMode){
+    const levBase = wrapLevies(est2026(zveBase, filing), filing, kistRate, soliMode);
+    const levWith = wrapLevies(est2026(zveBase + extraTaxable, filing), filing, kistRate, soliMode);
+    return {
+      est: levWith.est - levBase.est,
+      kist: levWith.kist - levBase.kist,
+      soli: levWith.soli - levBase.soli,
+      total: levWith.total - levBase.total,
+    };
+  }
+
+  function leviesStandaloneOnAmount(taxable, filing, kistRate, soliMode){
+    return wrapLevies(est2026(taxable, filing), filing, kistRate, soliMode);
+  }
+
+  function solveGrossFromNetStandalone(netTarget, filing, kistRate, soliMode){
+    netTarget = Math.max(0, +netTarget || 0);
+    if (netTarget === 0) return 0;
+    const lev0 = leviesStandaloneOnAmount(netTarget, filing, kistRate, soliMode);
+    if (lev0.total === 0) return netTarget;
+    let lo = netTarget, hi = netTarget * 3, expand = 0;
+    while (true) {
+      const netHi = hi - leviesStandaloneOnAmount(hi, filing, kistRate, soliMode).total;
+      if (netHi >= netTarget) break;
+      hi *= 2;
+      if (++expand > 8) break;
+    }
+    let iter = 0;
+    const maxIter = 60, tol = 0.5;
+    while (iter++ < maxIter) {
+      const mid = (lo + hi) / 2;
+      const netMid = mid - leviesStandaloneOnAmount(mid, filing, kistRate, soliMode).total;
+      const diff = netMid - netTarget;
+      if (Math.abs(diff) <= tol) return Math.round(mid);
+      if (diff < 0) lo = mid; else hi = mid;
+    }
+    return Math.round((lo + hi) / 2);
+  }
+
+  function solveGrossFromNet(netTarget, zvEBaseForDelta, filing, kistRate, soliMode){
+    netTarget = Math.max(0, +netTarget || 0);
+    if (netTarget === 0) return 0;
+    const lev0 = leviesDeltaFromExtra(zvEBaseForDelta, netTarget, filing, kistRate, soliMode);
+    if (lev0.total === 0) return netTarget;
+    let lo = netTarget, hi = netTarget * 3, expand = 0;
+    while (true) {
+      const netHi = hi - leviesDeltaFromExtra(zvEBaseForDelta, hi, filing, kistRate, soliMode).total;
+      if (netHi >= netTarget) break;
+      hi *= 2;
+      if (++expand > 8) break;
+    }
+    let iter = 0;
+    const maxIter = 60, tol = 0.5;
+    while (iter++ < maxIter) {
+      const mid = (lo + hi) / 2;
+      const netMid = mid - leviesDeltaFromExtra(zvEBaseForDelta, mid, filing, kistRate, soliMode).total;
+      const diff = netMid - netTarget;
+      if (Math.abs(diff) <= tol) return Math.round(mid);
+      if (diff < 0) lo = mid; else hi = mid;
+    }
+    return Math.round((lo + hi) / 2);
+  }
+
+  function pensionTaxableShare(year){
+    year = Math.max(2005, Math.min(2058, Math.floor(year)));
+    if (year <= 2020) return 50 + 2 * (year - 2005);
+    if (year === 2021) return 81;
+    if (year === 2022) return 82;
+    if (year >= 2023) return Math.min(100, 82.5 + 0.5 * (year - 2023));
+    return 82;
+  }
+
+  const filingEl = document.getElementById('filing');
+  const kistEl = document.getElementById('kist');
+  const soliEl = document.getElementById('soli');
+  const zve1El = document.getElementById('zve1');
+  const zve2Row = document.getElementById('zve2row');
+  const zve2El = document.getElementById('zve2');
+
+  const renteBruttoEl = document.getElementById('renteBrutto');
+  const renteBeginnEl = document.getElementById('renteBeginn');
+  const renteErstjahrEl = document.getElementById('renteErstjahr');
+  const calcRenteBtn = document.getElementById('calcRente');
+  const outRente = document.getElementById('outRente');
+
+  const nettoEl = document.getElementById('netto');
+  const nettorenteEl = document.getElementById('nettorente');
+  const txShareEl = document.getElementById('txShare');
+  const calcNetBtn = document.getElementById('calcNet');
+  const outNet = document.getElementById('outNet');
+
+  const extraEl = document.getElementById('extra');
+  const calc34Btn = document.getElementById('calc34');
+  const out34 = document.getElementById('out34');
+
+  const runTestsBtn = document.getElementById('runTests');
+  const testOutput = document.getElementById('testOutput');
+
+  function currentZVE(){
+    const filing = filingEl.value;
+    if (filing === 'splitting') {
+      zve2Row.style.display = '';
+      return clamp0(zve1El.value) + clamp0(zve2El.value);
+    }
+    zve2Row.style.display = 'none';
+    return clamp0(zve1El.value);
+  }
+
+  function renderRente(){
+    const filing = filingEl.value;
+    const kRate = parseFloat(kistEl.value);
+    const soliMode = soliEl.value;
+    const brutto = clamp0(renteBruttoEl.value);
+    const beginn = Math.floor(+renteBeginnEl.value || 2026);
+    const share = pensionTaxableShare(beginn) / 100;
+    const erstjahr = clamp0(renteErstjahrEl.value);
+    const basisFuerFreibetrag = erstjahr > 0 ? erstjahr : brutto;
+    const freibetragEuro = basisFuerFreibetrag * (1 - share);
+    const steuerpflichtig2026 = Math.max(0, brutto - freibetragEuro);
+    const levies = leviesStandaloneOnAmount(steuerpflichtig2026, filing, kRate, soliMode);
+    const nettoRente = brutto - levies.total;
+    outRente.hidden = false;
+    outRente.innerHTML = `
+      <h3>Rentenberechnung (Brutto → Netto)</h3>
+      <div class="line"><span>Renten‑Brutto</span><strong>${eur(brutto)}</strong></div>
+      <div class="line"><span>Nicht steuerpflichtiger Anteil (${((1 - share) * 100).toFixed(1)}% ab ${beginn})</span><strong>${eur(freibetragEuro)}</strong></div>
+      <div class="line"><span>Steuerpflichtiger Rentenbetrag 2026</span><strong>${eur(steuerpflichtig2026)}</strong></div>
+      <div class="line"><span>Abgaben (ESt+KiSt+Soli auf steuerpfl. Anteil)</span><strong>${eur(levies.total)} <span class="small">(ESt ${eur(levies.est)}, KiSt ${eur(levies.kist)}, Soli ${eur(levies.soli)})</span></strong></div>
+      <div class="line"><span><strong>Renten‑Netto</strong></span><strong>${eur(nettoRente)}</strong></div>
+      <div class="small" style="margin-top:8px">Euro‑Freibetrag bleibt lebenslang konstant; Erhöhungen voll steuerpflichtig.</div>`;
+    nettorenteEl.value = Math.floor(nettoRente);
+  }
+
+  function renderNet(){
+    const filing = filingEl.value;
+    const kRate = parseFloat(kistEl.value);
+    const soliMode = soliEl.value;
+    const fictiveNet = clamp0(nettoEl.value);
+    const netPensions = clamp0(nettorenteEl.value);
+    const pensionTxShare = Math.min(100, Math.max(0, +txShareEl.value || 0)) / 100;
+    const damageNet = Math.max(0, fictiveNet - netPensions);
+    const baseZVEForNet = Math.floor(currentZVE());
+    const taxablePensionBase = netPensions * pensionTxShare;
+    const baselineTaxable = baseZVEForNet + taxablePensionBase;
+    const useDeltaMethod = baselineTaxable > 0;
+
+    const grossDamage = useDeltaMethod
+      ? solveGrossFromNet(damageNet, baselineTaxable, filing, kRate, soliMode)
+      : solveGrossFromNetStandalone(damageNet, filing, kRate, soliMode);
+
+    const levies = useDeltaMethod
+      ? leviesDeltaFromExtra(baselineTaxable, grossDamage, filing, kRate, soliMode)
+      : leviesStandaloneOnAmount(grossDamage, filing, kRate, soliMode);
+
+    outNet.hidden = false;
+    outNet.innerHTML = `
+      <h3>Mod. Nettolohnmethode – Ergebnis</h3>
+      <div class="line"><span>Schaden vor Steuer (Netto)</span><strong>${eur(damageNet)}</strong></div>
+      <div class="line"><span>Steuer auf Schaden (ESt+KiSt+Soli)</span><strong>${eur(levies.total)} <span class="small">(ESt ${eur(levies.est)}, KiSt ${eur(levies.kist)}, Soli ${eur(levies.soli)})</span></strong></div>
+      <div class="line"><span><strong>Gesamtschaden (brutto, zu ersetzen)</strong></span><strong>${eur(grossDamage)}</strong></div>
+      <div class="small" style="margin-top:8px">${useDeltaMethod ? 'Delta-Bruttierung relativ zur Basisbesteuerung (Basis-zvE + steuerpflichtiger Anteil der Sozialrenten).' : 'Standalone-Bruttierung: kein Basis-zvE hinterlegt, daher eigenständige Tarifbesteuerung des Schadensbetrags.'}</div>`;
+  }
+
+  function render34(){
+    const filing = filingEl.value;
+    const kRate = parseFloat(kistEl.value);
+    const soliMode = soliEl.value;
+    const baseZVE34 = Math.floor(currentZVE());
+    const extraNet = clamp0(extraEl.value);
+
+    function solveGrossFromNet34(netTarget, useFifth){
+      netTarget = Math.max(0, +netTarget || 0);
+      if (netTarget === 0) return 0;
+      const L0 = leviesOnExtra34(baseZVE34, netTarget, filing, kRate, soliMode, useFifth);
+      if (L0.total === 0) return netTarget;
+      let lo = netTarget, hi = netTarget * 3, expand = 0;
+      while (true) {
+        const Lhi = leviesOnExtra34(baseZVE34, hi, filing, kRate, soliMode, useFifth).total;
+        const nhi = hi - Lhi;
+        if (nhi >= netTarget) break;
+        hi *= 2;
+        if (++expand > 8) break;
+      }
+      let iter = 0;
+      const maxIter = 60, tol = 0.5;
+      while (iter++ < maxIter) {
+        const mid = (lo + hi) / 2;
+        const Lm = leviesOnExtra34(baseZVE34, mid, filing, kRate, soliMode, useFifth).total;
+        const nm = mid - Lm;
+        const diff = nm - netTarget;
+        if (Math.abs(diff) <= tol) return Math.round(mid);
+        if (diff < 0) lo = mid; else hi = mid;
+      }
+      return Math.round((lo + hi) / 2);
+    }
+
+    const grossNo = solveGrossFromNet34(extraNet, false);
+    const levNo = leviesOnExtra34(baseZVE34, grossNo, filing, kRate, soliMode, false);
+    const grossYes = solveGrossFromNet34(extraNet, true);
+    const levYes = leviesOnExtra34(baseZVE34, grossYes, filing, kRate, soliMode, true);
+    const baseLev = wrapLevies(est2026(baseZVE34, filing), filing, kRate, soliMode);
+
+    out34.hidden = false;
+    out34.innerHTML = `
+      <div class="two">
+        <div>
+          <h3>Ohne Fünftelregelung</h3>
+          <div class="line"><span>Netto (Eingabe)</span><strong>${eur(extraNet)}</strong></div>
+          <div class="line"><span>Steuer (ESt+KiSt+Soli)</span><strong>${eur(levNo.total)} <span class="small">(ESt ${eur(levNo.est)}, KiSt ${eur(levNo.kist)}, Soli ${eur(levNo.soli)})</span></strong></div>
+          <div class="line"><span><strong>Brutto</strong></span><strong>${eur(grossNo)}</strong></div>
+        </div>
+        <div>
+          <h3>Mit Fünftelregelung</h3>
+          <div class="line"><span>Netto (Eingabe)</span><strong>${eur(extraNet)}</strong></div>
+          <div class="line"><span>Steuer (ESt+KiSt+Soli)</span><strong>${eur(levYes.total)} <span class="small">(ESt ${eur(levYes.est)}, KiSt ${eur(levYes.kist)}, Soli ${eur(levYes.soli)})</span></strong></div>
+          <div class="line"><span><strong>Brutto</strong></span><strong>${eur(grossYes)}</strong></div>
+        </div>
+      </div>
+      <div class="line" style="margin-top:10px"><span>Basis‑ESt (ohne außerordentliche Einkünfte)</span><strong>${eur(baseLev.total)} <span class="small">(ESt ${eur(baseLev.est)}, KiSt ${eur(baseLev.kist)}, Soli ${eur(baseLev.soli)})</span></strong></div>
+      <div class="line"><span><strong>Steuervorteil der Fünftelregelung</strong></span><strong>${eur(Math.max(0, levNo.total - levYes.total))}</strong></div>
+      <div class="small" style="margin-top:8px">Bruttierung via Fixpunkt; Soli-Freigrenze &amp; KiSt als Delta zur Gesamt‑ESt berücksichtigt.</div>`;
+  }
+
+  filingEl.addEventListener('change', () => { currentZVE(); });
+  calcRenteBtn.addEventListener('click', renderRente);
+  calcNetBtn.addEventListener('click', renderNet);
+  calc34Btn.addEventListener('click', render34);
+
+  for (let y = 2005; y <= 2058; y++) {
+    const opt = document.createElement('option');
+    opt.value = String(y);
+    opt.textContent = String(y);
+    if (y === 2026) opt.selected = true;
+    renteBeginnEl.appendChild(opt);
+  }
+
+  function runTests(){
+    const results = [];
+    const ok = (name, cond) => results.push({ name, ok: !!cond });
+    ok('DOM-Elemente vorhanden', !!(filingEl && kistEl && soliEl && zve1El && calcRenteBtn && calcNetBtn && calc34Btn && renteBeginnEl));
+    ok('Rentenbeginn-Select befüllt', renteBeginnEl.options.length >= (2058 - 2005 + 1));
+    ok('Tarif Grenzfälle', est2026_single(12348) === 0 && est2026_single(12349) > 0 && est2026_single(17800) >= est2026_single(17799));
+    ok('Soli Freigrenze (ledig) = 0', soliFromEst(20350, 'single', 'auto') === 0);
+    ok('Soli knapp über Freigrenze < 5.5%', soliFromEst(20400, 'single', 'auto') < Math.floor(0.055 * 20400));
+    ok('Rente bis 12.348 = 0', leviesStandaloneOnAmount(12348, 'single', 0.09, 'auto').total === 0);
+    const gs = solveGrossFromNetStandalone(5000, 'single', 0, 'auto');
+    ok('NLM Fixpunkt klein: Brutto≈Netto', Math.abs(gs - 5000) <= 1);
+    const gDelta = solveGrossFromNet(10000, 200000, 'single', 0.09, 'auto');
+    const gStand = solveGrossFromNetStandalone(10000, 'single', 0.09, 'auto');
+    ok('NLM mit Basis-zvE führt zu höherem Brutto als Standalone', gDelta >= gStand);
+    const zvEHigh = 200000, netWant = 10000;
+    const g2 = solveGrossFromNet(netWant, zvEHigh, 'single', 0.09, 'auto');
+    const l2b = leviesDeltaFromExtra(zvEHigh, g2, 'single', 0.09, 'auto');
+    ok('Delta-Fixpunkt Konsistenz', Math.abs((g2 - l2b.total) - netWant) <= 2);
+    const baseHigh34 = 200000, netWant34 = 10000;
+    function lev34(extra){ return leviesOnExtra34(baseHigh34, extra, 'single', 0.09, 'auto', true).total; }
+    let lo = netWant34, hi = netWant34 * 3;
+    for (let i = 0; i < 8; i++) { if (hi - lev34(hi) >= netWant34) break; hi *= 2; }
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      const nm = mid - lev34(mid);
+      if (Math.abs(nm - netWant34) <= 1) { lo = hi = mid; break; }
+      if (nm < netWant34) lo = mid; else hi = mid;
+    }
+    const gross34 = Math.round((lo + hi) / 2);
+    const lev34v = lev34(gross34);
+    ok('§34 Fixpunkt (hoch) konsistent', Math.abs((gross34 - lev34v) - netWant34) <= 2);
+
+    const out = results.map(r => `<div class="${r.ok ? 'small ok' : 'small fail'}">${r.ok ? '✔' : '✖'} ${r.name}</div>`).join('');
+    testOutput.hidden = false;
+    testOutput.innerHTML = `<h3>Testergebnisse</h3>${out}`;
+  }
+
+  runTestsBtn.addEventListener('click', runTests);
+
+  function renderPrintReport(){
+    try { renderRente(); } catch(e) {}
+    try { renderNet(); } catch(e) {}
+    try { render34(); } catch(e) {}
+
+    let report = document.getElementById('printReport');
+    if (!report) {
+      report = document.createElement('div');
+      report.id = 'printReport';
+      report.className = 'print-only';
+      document.querySelector('.container').appendChild(report);
+    }
+
+    const filingTxt = filingEl.value === 'splitting' ? 'Splittingtabelle' : 'Grundtabelle';
+    const kistTxt = ({'0':'0 %','0.08':'8 %','0.09':'9 %'}[kistEl.value] || kistEl.value);
+    const soliTxt = ({'auto':'automatisch','on':'immer berechnen','off':'nicht berechnen'}[soliEl.value] || soliEl.value);
+
+    const bruttoRente = clamp0(renteBruttoEl.value);
+    const rentenbeginn = Math.floor(+renteBeginnEl.value || 2026);
+    const rentenShare = pensionTaxableShare(rentenbeginn) / 100;
+    const erstjahr = clamp0(renteErstjahrEl.value);
+    const basisFuerFreibetrag = erstjahr > 0 ? erstjahr : bruttoRente;
+    const freibetragEuro = basisFuerFreibetrag * (1 - rentenShare);
+    const steuerpflichtigRente = Math.max(0, bruttoRente - freibetragEuro);
+    const renteLevies = leviesStandaloneOnAmount(steuerpflichtigRente, filingEl.value, parseFloat(kistEl.value), soliEl.value);
+    const nettoRente = bruttoRente - renteLevies.total;
+
+    const fictiveNet = clamp0(nettoEl.value);
+    const netPensions = clamp0(nettorenteEl.value);
+    const pensionTxShare = Math.min(100, Math.max(0, +txShareEl.value || 0)) / 100;
+    const damageNet = Math.max(0, fictiveNet - netPensions);
+    const baseZVEPrintNet = Math.floor(currentZVE());
+    const taxablePensionBase = netPensions * pensionTxShare;
+    const baselineTaxable = baseZVEPrintNet + taxablePensionBase;
+    const useDeltaMethod = baselineTaxable > 0;
+    const grossDamage = useDeltaMethod
+      ? solveGrossFromNet(damageNet, baselineTaxable, filingEl.value, parseFloat(kistEl.value), soliEl.value)
+      : solveGrossFromNetStandalone(damageNet, filingEl.value, parseFloat(kistEl.value), soliEl.value);
+    const damageLevies = useDeltaMethod
+      ? leviesDeltaFromExtra(baselineTaxable, grossDamage, filingEl.value, parseFloat(kistEl.value), soliEl.value)
+      : leviesStandaloneOnAmount(grossDamage, filingEl.value, parseFloat(kistEl.value), soliEl.value);
+
+    const baseZVEPrint34 = Math.floor(currentZVE());
+    const extraNet = clamp0(extraEl.value);
+    function solveGrossFromNet34Print(netTarget, useFifth){
+      netTarget = Math.max(0, +netTarget || 0);
+      if (netTarget === 0) return 0;
+      const l0 = leviesOnExtra34(baseZVEPrint34, netTarget, filingEl.value, parseFloat(kistEl.value), soliEl.value, useFifth);
+      if (l0.total === 0) return netTarget;
+      let lo = netTarget, hi = netTarget * 3, expand = 0;
+      while (true) {
+        const lHi = leviesOnExtra34(baseZVEPrint34, hi, filingEl.value, parseFloat(kistEl.value), soliEl.value, useFifth).total;
+        const nHi = hi - lHi;
+        if (nHi >= netTarget) break;
+        hi *= 2;
+        if (++expand > 8) break;
+      }
+      let iter = 0;
+      const maxIter = 60, tol = 0.5;
+      while (iter++ < maxIter) {
+        const mid = (lo + hi) / 2;
+        const lMid = leviesOnExtra34(baseZVEPrint34, mid, filingEl.value, parseFloat(kistEl.value), soliEl.value, useFifth).total;
+        const nMid = mid - lMid;
+        const diff = nMid - netTarget;
+        if (Math.abs(diff) <= tol) return Math.round(mid);
+        if (diff < 0) lo = mid; else hi = mid;
+      }
+      return Math.round((lo + hi) / 2);
+    }
+
+    const grossNo = solveGrossFromNet34Print(extraNet, false);
+    const levNo = leviesOnExtra34(baseZVEPrint34, grossNo, filingEl.value, parseFloat(kistEl.value), soliEl.value, false);
+    const grossYes = solveGrossFromNet34Print(extraNet, true);
+    const levYes = leviesOnExtra34(baseZVEPrint34, grossYes, filingEl.value, parseFloat(kistEl.value), soliEl.value, true);
+
+    report.innerHTML = `
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:10px;">
+          <img src="kanzleilogo.png" alt="Kanzleilogo" style="height:60px;object-fit:contain;">
+          <div style="font-weight:600;font-size:18px;">Berechnungsprotokoll – Einkommensschaden</div>
+        </div>
+        <h2>PDF-/Druckansicht – Berechnungsprotokoll</h2>
+        <div class="content">
+          <div class="line"><span>Veranlagungszeitraum</span><strong>2026</strong></div>
+          <div class="line"><span>Veranlagungsart</span><strong>${filingTxt}</strong></div>
+          <div class="line"><span>Kirchensteuer</span><strong>${kistTxt}</strong></div>
+          <div class="line"><span>Solidaritätszuschlag</span><strong>${soliTxt}</strong></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Rente – Berechnungsweg</h2>
+        <div class="content">
+          <div class="line"><span>Brutto-Rente</span><strong>${eur(bruttoRente)}</strong></div>
+          <div class="line"><span>Rentenbeginn</span><strong>${rentenbeginn}</strong></div>
+          <div class="line"><span>Steuerpflichtiger Anteil</span><strong>${(rentenShare * 100).toFixed(1)} %</strong></div>
+          <div class="line"><span>Rentenfreibetrag (Euro)</span><strong>${eur(freibetragEuro)}</strong></div>
+          <div class="line"><span>Steuerpflichtiger Rentenbetrag 2026</span><strong>${eur(steuerpflichtigRente)}</strong></div>
+          <div class="line"><span>Abgaben auf Rente</span><strong>${eur(renteLevies.total)}</strong></div>
+          <div class="line"><span>Netto-Rente</span><strong>${eur(nettoRente)}</strong></div>
+          <div class="calc-steps">
+            <div>Formel: Rentenfreibetrag = Basis für Freibetrag × (1 − steuerpflichtiger Anteil)</div>
+            <div>Formel: Netto-Rente = Brutto-Rente − (ESt + KiSt + Soli)</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Modifizierte Nettolohnmethode – Berechnungsweg</h2>
+        <div class="content">
+          <div class="line"><span>Fiktives Nettogehalt</span><strong>${eur(fictiveNet)}</strong></div>
+          <div class="line"><span>Netto-Sozialrenten</span><strong>${eur(netPensions)}</strong></div>
+          <div class="line"><span>Schaden vor Steuer (Netto)</span><strong>${eur(damageNet)}</strong></div>
+          <div class="line"><span>Brutto-Schaden</span><strong>${eur(grossDamage)}</strong></div>
+          <div class="line"><span>Steuer auf Schaden</span><strong>${eur(damageLevies.total)} <span class="small">(ESt ${eur(damageLevies.est)}, KiSt ${eur(damageLevies.kist)}, Soli ${eur(damageLevies.soli)})</span></strong></div>
+          <div class="line"><span>Gesamtschaden (brutto, zu ersetzen)</span><strong>${eur(grossDamage)}</strong></div>
+          <div class="calc-steps">
+            <div>Formel: Schaden vor Steuer = fiktives Nettogehalt − Netto-Sozialrenten</div>
+            <div>Bruttierung per Fixpunkt: gesucht ist G mit G − Abgaben(G) = Netto-Schaden</div>
+            <div>${useDeltaMethod ? 'Abgaben(G) = Mehrsteuer gegenüber der Basisbesteuerung (Basis-zvE + steuerpflichtiger Anteil der Sozialrenten).' : 'Abgaben(G) = ESt 2026 + KiSt + Soli auf den eigenständig versteuerten Schadensbetrag.'}</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>§34 EStG – Berechnungsweg</h2>
+        <div class="content two">
+          <div class="subtle-box">
+            <h3>Ohne Fünftelregelung</h3>
+            <div class="line"><span>Netto-Eingabe</span><strong>${eur(extraNet)}</strong></div>
+            <div class="line"><span>Brutto</span><strong>${eur(grossNo)}</strong></div>
+            <div class="line"><span>Steuer</span><strong>${eur(levNo.total)} <span class="small">(ESt ${eur(levNo.est)}, KiSt ${eur(levNo.kist)}, Soli ${eur(levNo.soli)})</span></strong></div>
+            <div class="calc-steps">
+              <div>ESt-Zuschlag = ESt(zvE + Brutto) − ESt(zvE)</div>
+              <div>Brutto = Netto + Steuer (über Fixpunkt ermittelt)</div>
+            </div>
+          </div>
+          <div class="subtle-box">
+            <h3>Mit Fünftelregelung</h3>
+            <div class="line"><span>Netto-Eingabe</span><strong>${eur(extraNet)}</strong></div>
+            <div class="line"><span>Brutto</span><strong>${eur(grossYes)}</strong></div>
+            <div class="line"><span>Steuer</span><strong>${eur(levYes.total)} <span class="small">(ESt ${eur(levYes.est)}, KiSt ${eur(levYes.kist)}, Soli ${eur(levYes.soli)})</span></strong></div>
+            <div class="calc-steps">
+              <div>ESt-Zuschlag = 5 × [ESt(zvE + Brutto/5) − ESt(zvE)]</div>
+              <div>Brutto = Netto + Steuer (über Fixpunkt ermittelt)</div>
+            </div>
+          </div>
+        </div>
+        <div class="content">
+          <div class="line"><span><strong>Steuervorteil der Fünftelregelung</strong></span><strong>${eur(Math.max(0, levNo.total - levYes.total))}</strong></div>
+        </div>
+      </div>`;
+  }
+
+  const printBtn = document.getElementById('printBtn');
+  if (printBtn) {
+    printBtn.addEventListener('click', function(){
+      renderPrintReport();
+      window.print();
+    });
+  }
+});
+</script>
+</body>
+</html>
